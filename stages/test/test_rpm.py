@@ -47,6 +47,29 @@ def test_import_gpg_keys(mock_run, tmp_path, stage_module, ignore_failures):
     assert mock_run.call_args[1] == {"check": not ignore_failures}
 
 
+ALL_RPM_TAGS = {
+    "NAME", "VERSION", "RELEASE", "EPOCH", "ARCH", "SIGMD5",
+    "SHA1HEADER", "SHA256HEADER", "SHA3_256HEADER", "SIGPGP", "SIGGPG",
+}
+
+
+def test_package_metadata_query_format_all_tags(stage_module):
+    qf = stage_module.package_metadata_query_format(ALL_RPM_TAGS)
+    assert qf.startswith("\\{\n")
+    assert qf.endswith("\\},\n    ")
+    assert '"name": "%{NAME}"' in qf
+    assert '%|SHA3_256HEADER?{"%{SHA3_256HEADER}"}:{null}|' in qf
+    assert '"sha3_256header": null' not in qf
+
+
+def test_package_metadata_query_format_unsupported_tags(stage_module):
+    available = ALL_RPM_TAGS - {"SHA3_256HEADER"}
+    qf = stage_module.package_metadata_query_format(available)
+    assert '"sha3_256header": null' in qf
+    assert "SHA3_256HEADER" not in qf
+    assert '%|SHA256HEADER?{"%{SHA256HEADER}"}:{null}|' in qf
+
+
 @pytest.mark.parametrize("rpm_output,expected_packages", [
     # all optional fields present
     (
@@ -166,11 +189,14 @@ def test_import_gpg_keys(mock_run, tmp_path, stage_module, ignore_failures):
 ])
 @mock.patch("subprocess.run")
 def test_generate_package_metadata(mock_run, tmp_path, stage_module, rpm_output, expected_packages):
-    mock_run.return_value = mock.Mock(stdout=rpm_output)
+    mock_run.side_effect = [
+        mock.Mock(stdout="\n".join(sorted(ALL_RPM_TAGS))),
+        mock.Mock(stdout=rpm_output),
+    ]
     tree = str(tmp_path / "tree")
     result = stage_module.generate_package_metadata(tree, [])
     assert result["packages"] == expected_packages
-    cmd = mock_run.call_args[0][0]
+    cmd = mock_run.call_args_list[1][0][0]
     assert cmd[0] == "rpm"
     assert "--root" in cmd
     assert "-qa" in cmd

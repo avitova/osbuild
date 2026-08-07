@@ -259,6 +259,7 @@ class TestStages(test.TestBase):
                     # if it is present and the version is has different length (short key id vs. full key id)
                     for test_pkg, got_pkg in zip(test_rpm_pkgs_md, got_rpm_pkgs_md):
                         self.assertEqual(test_pkg["name"], got_pkg["name"])
+
                         if test_pkg["name"] != "gpg-pubkey":
                             continue
                         if len(test_pkg["version"]) == len(got_pkg["version"]):
